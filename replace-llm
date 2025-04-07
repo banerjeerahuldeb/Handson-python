@@ -1,0 +1,15 @@
+mode = st.radio("Select Mode", ["Online (OpenAI)", "Offline (Local Models)"])
+
+# Select LLM and Embedding based on mode
+if mode == "Online (OpenAI)":
+    llm = OpenAI(temperature=0)
+    embeddings = OpenAIEmbeddings()
+    st.info("Using OpenAI API (requires internet)")
+else:
+    # Load local embedding model
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    
+    # Load local LLM (Mistral or any model from Hugging Face)
+    st.info("Using Local LLM (Mistral). Make sure models are downloaded.")
+    pipe = pipeline("text-generation", model="mistralai/Mistral-7B-Instruct-v0.1", device_map="auto", max_new_tokens=256)
+    llm = HuggingFacePipeline(pipeline=pipe)
