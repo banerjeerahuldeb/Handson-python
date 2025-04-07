@@ -1,0 +1,1 @@
+pip install streamlit langchain openai faiss-cpu PyPDF2 python-docx sentence-transformers transformers accelerate
