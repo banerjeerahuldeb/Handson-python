@@ -1,1 +1,9 @@
 pip install streamlit langchain openai faiss-cpu PyPDF2 python-docx sentence-transformers transformers accelerate
+
+flask
+faiss-cpu
+sentence-transformers
+pdfplumber
+python-docx
+llama-cpp-python
+openai
