@@ -1,0 +1,45 @@
+from ctransformers import AutoModelForCausalLM
+import google.generativeai as genai
+import os
+
+# Load LLaMA offline model
+llm = AutoModelForCausalLM.from_pretrained(
+    "models/",
+    model_file="llama-2-7b-chat.Q4_K_M.gguf",
+    model_type="llama",
+    config={"max_new_tokens": 256, "temperature": 0.7}
+)
+
+# Configure Gemini API key (set in env variable or here)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY") or "your-gemini-api-key")
+
+# Create Gemini model (chat model)
+gemini = genai.GenerativeModel('gemini-pro')
+
+def stream_response_offline(question, context):
+    prompt = f"""[INST] <<SYS>>
+You are a helpful assistant. Use the context below to answer the user's question.
+<</SYS>>
+
+Context:
+{context}
+
+Question:
+{question}
+[/INST]"""
+
+    for chunk in llm(prompt, stream=True):
+        yield chunk
+
+def get_response_online(question, context):
+    prompt = f"""You are a helpful assistant. Use the following context to answer the user's question.
+
+Context:
+{context}
+
+Question:
+{question}"""
+
+    chat = gemini.start_chat(history=[])
+    response = chat.send_message(prompt)
+    return response.text
