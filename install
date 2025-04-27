@@ -1,9 +1,12 @@
-pip install streamlit langchain openai faiss-cpu PyPDF2 python-docx sentence-transformers transformers accelerate
+pip install langchain chromadb pypdf2 python-pptx python-docx sentence-transformers gradio transformers torch
 
-flask
-faiss-cpu
-sentence-transformers
-pdfplumber
-python-docx
-llama-cpp-python
-openai
+from huggingface_hub import snapshot_download
+
+# Download models (run once while online)
+snapshot_download(repo_id=EMBEDDING_MODEL, local_dir="./embeddings")
+snapshot_download(repo_id=QA_MODEL, local_dir="./qa_model")
+
+# Change these lines in __init__():
+self.embeddings = HuggingFaceEmbeddings(model_name="./embeddings")
+self.tokenizer = AutoTokenizer.from_pretrained("./qa_model")
+self.model = AutoModelForQuestionAnswering.from_pretrained("./qa_model")
