@@ -1,9 +1,11 @@
 import csv
 import re
+import gradio as gr
 from transformers import pipeline, GPT2LMHeadModel, GPT2Tokenizer
 
-# 1. Create Knowledge Base CSV
-CSV_CONTENT = """id,name,role,department,skills,reports_to
+# 1. Create and load employee data
+def initialize_data():
+    CSV_CONTENT = """id,name,role,department,skills,reports_to
 1,Alice,Developer,IT,"Azure, .NET, C#",Bob
 2,Bob,Manager,IT,"Cloud Architecture, Project Management",Carol
 3,Carol,CTO,Executive,"Leadership, Strategy",NULL
@@ -11,75 +13,103 @@ CSV_CONTENT = """id,name,role,department,skills,reports_to
 5,Eve,Marketing Lead,Marketing,"SEO, Campaign Management",Carol
 6,Frank,Developer,IT,"Java, Oracle, Spring Boot",Bob
 """
+    with open("employees.csv", "w") as f:
+        f.write(CSV_CONTENT)
 
-with open("employees.csv", "w") as f:
-    f.write(CSV_CONTENT)
-
-# 2. Knowledge Graph to Text Converter
-def csv_to_context(csv_path):
+def load_employees():
     employees = []
-    with open(csv_path, "r") as f:
+    with open("employees.csv", "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            skills = f"Skilled in: {row['skills']}" if row['skills'] else ""
-            report = f"Reports to: {row['reports_to']}" if row['reports_to'] != "NULL" else ""
-            employees.append(
-                f"Employee {row['name']} - {row['role']} ({row['department']}). {skills} {report}"
-            )
-    return " ".join(employees)
+            employees.append({
+                'name': row['name'],
+                'skills': [s.strip() for s in row['skills'].split(",")],
+                'department': row['department']
+            })
+    return employees
 
-# 3. Initialize Offline LLM (GPT-2)
+initialize_data()
+employees = load_employees()
+employee_names = [e['name'] for e in employees]
+
+# 2. Initialize LLM
 model = GPT2LMHeadModel.from_pretrained("gpt2")
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-model.eval()  # Reduces memory usage
-
-qa_pipeline = pipeline(
+generator = pipeline(
     "text-generation",
     model=model,
     tokenizer=tokenizer,
-    device=-1  # Force CPU usage
+    device=-1,
+    temperature=0.01,
 )
 
-# 4. Query Processing with Skill Matching
-def get_employees():
-    with open("employees.csv", "r") as f:
-        return [row["name"] for row in csv.DictReader(f)]
+# 3. Query processing
+def direct_skill_lookup(skill):
+    skill = skill.lower()
+    return [e['name'] for e in employees if any(skill in s.lower() for s in e['skills'])]
 
-def refine_answer(answer, employees):
-    answer_clean = re.sub(r"[^a-zA-Z, ]", "", answer).lower()
-    matches = []
-    for emp in employees:
-        if emp.lower() in answer_clean:
-            matches.append(emp)
-    return ", ".join(matches) if matches else "No matching employees found"
-
-def answer_question(question):
-    kg_context = csv_to_context("employees.csv")
-    employees = get_employees()
+def process_question(question):
+    # Direct skill lookup
+    skill_match = re.search(r"(skilled in|knows|with|who knows)\s+(.+?)(\?|$)", question, re.I)
+    if skill_match:
+        skill = skill_match.group(2).strip()
+        results = direct_skill_lookup(skill)
+        if results:
+            return ", ".join(results)
     
-    prompt = f"""Based on this employee database:
-{kg_context}
+    # LLM fallback
+    context = "\n".join([f"{e['name']} ({e['department']}): {', '.join(e['skills'])}" for e in employees])
+    prompt = f"""Answer using ONLY this data:
+{context}
+
+Format answer as: names separated by commas
 Question: {question}
 Answer:"""
     
-    response = qa_pipeline(
+    response = generator(
         prompt,
-        max_length=300,
+        max_length=200,
         num_return_sequences=1,
-        temperature=0.1,
-        pad_token_id=50256
+        pad_token_id=tokenizer.eos_token_id
     )
     
-    raw_answer = response[0]["generated_text"].split("Answer:")[-1].strip()
-    return refine_answer(raw_answer, employees)
+    answer = response[0]['generated_text'].split("Answer:")[-1].strip()
+    valid_names = [name.strip() for name in re.split(r",|\sand\s", answer) 
+                  if name.strip() in employee_names]
+    
+    return ", ".join(valid_names) if valid_names else "No matches found"
 
-# 5. Interactive Interface
+# 4. Gradio UI
+def show_csv():
+    with open("employees.csv", "r") as f:
+        return f.read()
+
+with gr.Blocks(title="Employee Knowledge Graph") as demo:
+    gr.Markdown("# 🧑💼 Employee Skill Finder")
+    gr.Markdown("Query employee skills using our knowledge graph")
+    
+    with gr.Row():
+        with gr.Column():
+            csv_view = gr.Textbox(label="Employee Database", value=show_csv, 
+                               interactive=False, lines=10)
+        with gr.Column():
+            question = gr.Textbox(label="Ask a question", placeholder="Who knows Java?")
+            answer = gr.Textbox(label="Answer", interactive=False)
+            ask_btn = gr.Button("Ask")
+    
+    with gr.Row():
+        gr.Examples(
+            examples=[
+                ["Who knows Java?"],
+                ["List Python developers"],
+                ["Who works in Marketing?"],
+                ["Find employees with Azure skills"]
+            ],
+            inputs=question
+        )
+
+    ask_btn.click(fn=process_question, inputs=question, outputs=answer)
+    demo.load(fn=show_csv, outputs=csv_view)
+
 if __name__ == "__main__":
-    print("Employee Knowledge Graph Q&A\nType 'exit' to quit")
-    while True:
-        question = input("\nYour question: ")
-        if question.lower() in ["exit", "quit"]:
-            break
-        if not question.strip():
-            continue
-        print("Answer:", answer_question(question))
+    demo.launch()
