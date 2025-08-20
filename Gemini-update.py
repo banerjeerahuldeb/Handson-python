@@ -255,6 +255,25 @@ def answer_with_sql(user_text: str):
     return reply, table_files
 
 # ------- Chat Input -------
+def gemini_chat(messages, model: str = MODEL_NAME, temperature: float = 0.2) -> str:
+    """
+    Simple wrapper around Gemini chat API.
+    messages = list of {"role": "system"|"user"|"assistant", "content": str}
+    Returns: string content of response.
+    """
+    # Convert to Gemini's format
+    history = []
+    for m in messages:
+        if m["role"] == "user":
+            history.append({"role": "user", "parts": [m["content"]]})
+        elif m["role"] in ("assistant", "system"):
+            # Gemini doesn't have system role directly, we prepend it as assistant
+            history.append({"role": "model", "parts": [m["content"]]})
+
+    model_obj = genai.GenerativeModel(model)
+    resp = model_obj.generate_content(history, generation_config={"temperature": temperature})
+    return resp.text.strip() if resp and hasattr(resp, "text") else ""
+
 user_text = st.chat_input(
     "Ask your question...",
     max_chars=2000
