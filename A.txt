@@ -52,3 +52,44 @@ for m in messages:
         # Wrap the content in our bubble div
         klass = "bot" if m["role"] == "assistant" else "user"
         st.markdown(f'<div class="bubble {klass}">{m["content"]}</div>', unsafe_allow_html=True)
+
+
+st.markdown("""
+<style>
+/* Tiny, horizontal feedback row */
+.feedback-tight {
+  display: inline-flex;         /* make children sit in a row */
+  align-items: center;
+  gap: 6px;                     /* control the gap here */
+  margin-top: 6px;
+}
+
+/* Make Streamlit buttons shrink to content */
+.feedback-tight .stButton { margin: 0 !important; }
+.feedback-tight .stButton > button {
+  width: auto !important;       /* no full-width buttons */
+  min-width: 0 !important;
+  padding: 2px 10px !important; /* compact paddings */
+  border-radius: 10px;          /* nice little pills */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
+
+with st.chat_message("assistant"):
+    st.markdown(f'<div class="bubble assistant">{reply_html}</div>', unsafe_allow_html=True)
+
+    # Feedback buttons side-by-side with tiny gap
+    with st.container():
+        st.markdown('<div class="feedback-tight">', unsafe_allow_html=True)
+        up = st.button("👍", key=f"fb_up_{msg_id}", help="Helpful")
+        down = st.button("👎", key=f"fb_down_{msg_id}", help="Not helpful")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    if up:
+        st.session_state.feedback[msg_id] = "up"
+        st.rerun()
+    if down:
+        st.session_state.feedback[msg_id] = "down"
+        st.rerun()
