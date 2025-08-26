@@ -1,5 +1,15 @@
 import streamlit as st
 
+st.markdown(
+    f"""
+    <div style="display:inline-flex; gap:6px; font-size:20px; cursor:pointer;">
+        <span onclick="fetch('/?_fb=up_{msg_id}')">👍</span>
+        <span onclick="fetch('/?_fb=down_{msg_id}')">👎</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 # ===== CSS: chat bubbles =====
 st.markdown(
     """
