@@ -1,0 +1,35 @@
+st.markdown(
+    """
+    <style>
+    .chat-bubble {
+        padding: 10px 15px;
+        margin: 5px;
+        border-radius: 15px;
+        display: inline-block;
+        max-width: 70%;
+        word-wrap: break-word;
+        font-size: 16px;
+    }
+    .user-bubble {
+        background-color: #DCF8C6;   /* light green like WhatsApp */
+        color: black;
+        text-align: right;
+        float: right;
+        clear: both;
+    }
+    .bot-bubble {
+        background-color: #E8EAF6;   /* light blue/grey */
+        color: black;
+        text-align: left;
+        float: left;
+        clear: both;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Example chat history
+st.markdown('<div class="chat-bubble bot-bubble">Hello! How can I help you?</div>', unsafe_allow_html=True)
+st.markdown('<div class="chat-bubble user-bubble">Hi, tell me about pump maintenance</div>', unsafe_allow_html=True)
+st.markdown('<div class="chat-bubble bot-bubble">Sure! Here are the safety steps…</div>', unsafe_allow_html=True)
