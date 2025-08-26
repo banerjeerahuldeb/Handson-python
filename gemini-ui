@@ -1,0 +1,314 @@
+import streamlit as st
+import time
+from datetime import datetime
+from uuid import uuid4
+
+# =========================
+# App Config / Theme
+# =========================
+st.set_page_config(
+    page_title="Gemini-like Chat",
+    page_icon="✨",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# --- Global CSS to feel closer to Gemini ---
+st.markdown("""
+<style>
+/* App body */
+.block-container { padding-top: 0.6rem; }
+
+/* Top app bar */
+.gl-appbar {
+  position: sticky; top: 0; z-index: 1000;
+  background: var(--gl-surface, #ffffff);
+  backdrop-filter: saturate(180%) blur(10px);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  padding: 10px 12px;
+}
+.gl-appbar .row { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.gl-title { font-weight: 700; letter-spacing:.1px; }
+.gl-chip {
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.2rem .55rem; border:1px solid rgba(0,0,0,.08);
+  border-radius: 999px; font-size: .85rem; background: rgba(0,0,0,.03);
+}
+.gl-iconbtn {
+  border: 1px solid rgba(0,0,0,.08);
+  padding:.35rem .55rem; border-radius:.6rem; cursor:pointer;
+}
+
+/* Chat bubbles (Material-ish cards) */
+.chat-card {
+  border: 1px solid rgba(0,0,0,.06);
+  background: var(--gl-surface, #fff);
+  padding: 14px 16px; border-radius: 14px; box-shadow: 0 2px 10px rgba(0,0,0,.03);
+}
+.chat-user   { border-top-left-radius: 4px; }
+.chat-assist { border-top-right-radius: 4px; }
+
+/* Message toolbar */
+.msg-toolbar { display:flex; gap:.5rem; margin-top:.4rem; opacity:.85; }
+
+/* Sidebar sections */
+.sidebar-section h4 { margin: 0.2rem 0 0.6rem 0; }
+.convo-item {
+  padding: .45rem .55rem; border-radius:.5rem; cursor:pointer;
+}
+.convo-item:hover { background: rgba(0,0,0,.05); }
+.convo-item.active { background: rgba(0,0,0,.08); font-weight: 600; }
+
+/* Inputs */
+.gl-search {
+  background:#fff; border:1px solid rgba(0,0,0,.08); border-radius:.6rem; padding:.4rem .6rem;
+}
+
+/* Light/Dark variable */
+:root { --gl-surface: #ffffff; }
+html[data-theme="dark"] :root { --gl-surface: #0e1117; }
+</style>
+""", unsafe_allow_html=True)
+
+# =========================
+# Session State Boot
+# =========================
+def ss_boot():
+    ss = st.session_state
+    if "conversations" not in ss:
+        ss.conversations = {}  # id -> {id, title, messages, docs}
+    if "current" not in ss:
+        cid = str(uuid4())
+        ss.current = cid
+        ss.conversations[cid] = {"id": cid, "title": "New chat", "messages": [], "docs": []}
+    if "persona_key" not in ss:
+        ss.persona_key = "general"
+    if "theme_dark" not in ss:
+        ss.theme_dark = False
+    if "model_choice" not in ss:
+        ss.model_choice = "Stub (wire your LLM)"
+    if "feedback" not in ss:
+        ss.feedback = {}  # msg_ts -> "up"/"down"
+ss_boot()
+
+PERSONAS = {
+    "plant": {
+        "label": "Plant Operator",
+        "style": {
+            "tone": "action-oriented, terse",
+            "safety_first": True,
+            "checklist": True
+        }
+    },
+    "corporate": {
+        "label": "Corporate Employee",
+        "style": {
+            "tone": "polished, structured, executive-ready",
+            "safety_first": False,
+            "checklist": False
+        }
+    },
+    "general": {
+        "label": "General Employee",
+        "style": {
+            "tone": "neutral, concise, helpful",
+            "safety_first": False,
+            "checklist": False
+        }
+    }
+}
+
+def now_iso():
+    return datetime.utcnow().isoformat()
+
+def current_convo():
+    return st.session_state.conversations[st.session_state.current]
+
+def set_convo_title_from_first_user_message(conv):
+    for m in conv["messages"]:
+        if m["role"] == "user":
+            text = m["content"].strip().splitlines()[0]
+            conv["title"] = (text[:34] + "…") if len(text) > 35 else text
+            return
+
+# =========================
+# LLM Stub (streaming)
+# Replace with your Gemini/OpenAI call
+# =========================
+def generate_reply_stream(prompt: str, persona: dict, docs_meta: list):
+    """Yield chunks to simulate streaming. Replace with real stream from LLM."""
+    doc_list = ", ".join(d["name"] for d in docs_meta) if docs_meta else "no documents uploaded"
+    pre = f"(Persona: {persona['style']['tone']}; Safety={'ON' if persona['style']['safety_first'] else 'OFF'})\n"
+    if persona["style"]["checklist"]:
+        text = pre + f"I see {doc_list}.\n\nChecklist response (demo):\n1) Understand request\n2) Consult SOP\n3) Provide steps + warnings\n4) Confirm completion"
+    else:
+        text = pre + f"I see {doc_list}.\n\nYou asked: “{prompt}”\n(Replace this with real LLM output.)"
+    # Stream in small chunks
+    for i in range(0, len(text), 20):
+        yield text[i:i+20]
+        time.sleep(0.01)
+
+# =========================
+# Sidebar (Left Rail)
+# =========================
+with st.sidebar:
+    st.markdown("#### ✨ Gemini‑like")
+    c1, c2 = st.columns([1,1])
+    if c1.button("➕ New chat", use_container_width=True):
+        cid = str(uuid4())
+        st.session_state.conversations[cid] = {"id": cid, "title": "New chat", "messages": [], "docs": []}
+        st.session_state.current = cid
+        st.rerun()
+    if c2.button("🗑️ Clear chat", type="secondary", use_container_width=True):
+        current = current_convo()
+        current["messages"].clear()
+        current["title"] = "New chat"
+        st.rerun()
+
+    st.divider()
+    st.markdown("#### Past chats")
+    q = st.text_input("Search", key="search_conv", label_visibility="collapsed", placeholder="Search chats...", help="Search by title")
+    for cid, conv in list(st.session_state.conversations.items()):
+        title = conv["title"]
+        if q and q.lower() not in title.lower():
+            continue
+        is_active = (cid == st.session_state.current)
+        if st.button(title or "Untitled", key=f"convo_{cid}", use_container_width=True):
+            st.session_state.current = cid
+            st.rerun()
+
+    st.divider()
+    st.markdown("#### 📁 Documents")
+    up = st.file_uploader("Upload files", accept_multiple_files=True, label_visibility="collapsed")
+    if up:
+        cv = current_convo()
+        for f in up:
+            # avoid duplicates by (name,size)
+            if not any((d["name"]==f.name and len(d["bytes"])==len(f.getvalue())) for d in cv["docs"]):
+                cv["docs"].append({"name": f.name, "bytes": f.getvalue()})
+        st.rerun()
+
+    cv = current_convo()
+    if cv["docs"]:
+        for d in cv["docs"]:
+            st.caption(f"• {d['name']}")
+        if st.button("Clear documents", type="secondary"):
+            cv["docs"].clear()
+            st.rerun()
+    else:
+        st.caption("No documents yet.")
+
+# =========================
+# Top App Bar
+# =========================
+st.markdown('<div class="gl-appbar"><div class="row">', unsafe_allow_html=True)
+left, mid, right = st.columns([1.2, 2, 1])
+with left:
+    st.markdown('<div class="gl-title">Gemini‑like Chat</div>', unsafe_allow_html=True)
+
+with mid:
+    # Persona chip and quick switch
+    persona_key = st.session_state.persona_key
+    persona_label = PERSONAS[persona_key]["label"]
+    st.markdown(f'<span class="gl-chip">🧠 {persona_label}</span>', unsafe_allow_html=True)
+
+with right:
+    # Settings popover
+    pop = st.popover("⚙️ Settings", use_container_width=True)
+    with pop:
+        st.subheader("Chat Settings")
+        persona_key = st.selectbox(
+            "Persona",
+            options=list(PERSONAS.keys()),
+            format_func=lambda k: PERSONAS[k]["label"],
+            index=list(PERSONAS.keys()).index(st.session_state.persona_key),
+        )
+        st.session_state.persona_key = persona_key
+
+        st.selectbox(
+            "Model",
+            options=["Stub (wire your LLM)", "Gemini 1.5 Pro", "OpenAI GPT‑4o", "Local (Ollama)"],
+            key="model_choice"
+        )
+        st.toggle("Dark mode (UI only)", key="theme_dark", help="Toggles a dark surface. For true dark theme, configure Streamlit theme.")
+        st.caption("Remember to pass persona & retrieved doc chunks to your LLM prompt.")
+
+st.markdown('</div></div>', unsafe_allow_html=True)
+
+# Apply theme surface hint (for CSS variable; visual only)
+if st.session_state.theme_dark:
+    st.markdown("<script>document.documentElement.setAttribute('data-theme','dark');</script>", unsafe_allow_html=True)
+else:
+    st.markdown("<script>document.documentElement.setAttribute('data-theme','light');</script>", unsafe_allow_html=True)
+
+# =========================
+# Chat History
+# =========================
+cv = current_convo()
+for msg in cv["messages"]:
+    with st.chat_message(msg["role"]):
+        # Card visual
+        st.markdown(
+            f'<div class="chat-card {"chat-assist" if msg["role"]=="assistant" else "chat-user"}">{msg["content"]}</div>',
+            unsafe_allow_html=True
+        )
+        if msg["role"] == "assistant":
+            # Feedback toolbar
+            col1, col2 = st.columns([.08, .92])
+            with col1:
+                up_key = f"up_{msg['ts']}"
+                down_key = f"down_{msg['ts']}"
+                cols = st.columns(2)
+                with cols[0]:
+                    if st.button("👍", key=up_key, help="Good answer"):
+                        st.session_state.feedback[msg["ts"]] = "up"
+                with cols[1]:
+                    if st.button("👎", key=down_key, help="Needs work"):
+                        st.session_state.feedback[msg["ts"]] = "down"
+            with col2:
+                fb = st.session_state.feedback.get(msg["ts"])
+                if fb:
+                    st.caption(f"Feedback recorded: { '👍' if fb=='up' else '👎' }")
+
+# =========================
+# Chat Input + Streaming
+# =========================
+prompt = st.chat_input("Message Gemini‑like assistant")
+if prompt:
+    # Append user
+    user_msg = {"role": "user", "content": prompt, "ts": now_iso()}
+    cv["messages"].append(user_msg)
+    if cv["title"] == "New chat":
+        set_convo_title_from_first_user_message(cv)
+
+    # Assistant streaming placeholder
+    with st.chat_message("assistant"):
+        placeholder = st.empty()
+        acc = ""
+
+        persona = PERSONAS[st.session_state.persona_key]
+        for chunk in generate_reply_stream(prompt, persona, cv["docs"]):
+            acc += chunk
+            placeholder.markdown(f'<div class="chat-card chat-assist">{acc}</div>', unsafe_allow_html=True)
+
+        # Finalize
+        asst_msg = {"role": "assistant", "content": acc, "ts": now_iso()}
+        cv["messages"].append(asst_msg)
+
+        # Feedback toolbar (inline after stream)
+        col1, col2 = st.columns([.08, .92])
+        with col1:
+            cols = st.columns(2)
+            with cols[0]:
+                if st.button("👍", key=f"up_{asst_msg['ts']}"):
+                    st.session_state.feedback[asst_msg["ts"]] = "up"
+            with cols[1]:
+                if st.button("👎", key=f"down_{asst_msg['ts']}"):
+                    st.session_state.feedback[asst_msg["ts"]] = "down"
+        with col2:
+            st.caption("Was this helpful?")
+
+# =========================
+# Footer hint
+# =========================
+st.caption("This UI is Gemini‑inspired. Hook up your LLM in generate_reply_stream(). Files uploaded on the left can power RAG.")
