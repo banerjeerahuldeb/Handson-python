@@ -1,35 +1,54 @@
+import streamlit as st
+
+# ===== CSS: chat bubbles =====
 st.markdown(
     """
     <style>
-    .chat-bubble {
-        padding: 10px 15px;
-        margin: 5px;
-        border-radius: 15px;
-        display: inline-block;
-        max-width: 70%;
+    /* Optional: tighten default chat message padding */
+    [data-testid="stChatMessage"] { padding: 0.25rem 0; }
+
+    /* Shared bubble style */
+    .bubble {
+        display: block;              /* so auto margins work */
+        max-width: 75%;
+        padding: 10px 14px;
+        border-radius: 16px;
         word-wrap: break-word;
+        line-height: 1.35;
         font-size: 16px;
+        box-shadow: 0 1px 2px rgba(0,0,0,.06);
     }
-    .user-bubble {
-        background-color: #DCF8C6;   /* light green like WhatsApp */
-        color: black;
-        text-align: right;
-        float: right;
-        clear: both;
+
+    /* Assistant (left) */
+    .bubble.bot {
+        background: #E8EAF6;
+        color: #111;
+        margin-right: auto;          /* left align */
+        border-top-left-radius: 6px; /* speechy corner */
     }
-    .bot-bubble {
-        background-color: #E8EAF6;   /* light blue/grey */
-        color: black;
-        text-align: left;
-        float: left;
-        clear: both;
+
+    /* You / self (right) */
+    .bubble.user {
+        background: #DCF8C6;
+        color: #111;
+        margin-left: auto;           /* right align */
+        text-align: left;            /* keep text left inside bubble */
+        border-top-right-radius: 6px;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Example chat history
-st.markdown('<div class="chat-bubble bot-bubble">Hello! How can I help you?</div>', unsafe_allow_html=True)
-st.markdown('<div class="chat-bubble user-bubble">Hi, tell me about pump maintenance</div>', unsafe_allow_html=True)
-st.markdown('<div class="chat-bubble bot-bubble">Sure! Here are the safety steps…</div>', unsafe_allow_html=True)
+# ===== Example render with st.chat_message =====
+messages = [
+    {"role": "assistant", "content": "Hello! How can I help you today?"},
+    {"role": "user", "content": "Make my self messages look like right-aligned bubbles."},
+    {"role": "assistant", "content": "Done! Your messages now align to the right."},
+]
+
+for m in messages:
+    with st.chat_message(m["role"], avatar="🤖" if m["role"]=="assistant" else "🧑"):
+        # Wrap the content in our bubble div
+        klass = "bot" if m["role"] == "assistant" else "user"
+        st.markdown(f'<div class="bubble {klass}">{m["content"]}</div>', unsafe_allow_html=True)
