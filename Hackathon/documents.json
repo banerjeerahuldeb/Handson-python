@@ -1,0 +1,143 @@
+[
+  {
+    "id": "DOC-001",
+    "title": "EBS Refinery Safety Procedures",
+    "summary": "Step-by-step refinery safety SOP with checklists and escalation matrix.",
+    "tower": "EBS",
+    "track": "Safety",
+    "source": "SharePoint",
+    "tags": [
+      "SOP",
+      "Safety",
+      "Refinery"
+    ],
+    "url": "https://sharepoint/sites/ebs/refinery-safety",
+    "allowed_roles": [
+      "EBS Engineer",
+      "EBS Lead",
+      "Account Admin"
+    ],
+    "content": "Personal protective equipment; confined space entry; LOTO; shift handover; RCA template; lessons learned."
+  },
+  {
+    "id": "DOC-002",
+    "title": "NonEBS API Integration Guide",
+    "summary": "How to integrate third-party APIs using Azure APIM, retries, and circuit breakers.",
+    "tower": "NonEBS",
+    "track": "Integration",
+    "source": "Azure DevOps Wiki",
+    "tags": [
+      "API",
+      "APIM",
+      "Resilience"
+    ],
+    "url": "https://dev.azure.com/nonEBS/wiki/api-integration",
+    "allowed_roles": [
+      "NonEBS Engineer",
+      "Integration Lead",
+      "Account Admin"
+    ],
+    "content": "OAuth2 client credentials; throttling; idempotency keys; distributed tracing; retry-after headers; APIM policies."
+  },
+  {
+    "id": "DOC-003",
+    "title": "Middleware Monitoring SOP",
+    "summary": "Standard runbook for MQ, Kafka, API Gateway monitoring and triage.",
+    "tower": "Middleware",
+    "track": "Operations",
+    "source": "Teams",
+    "tags": [
+      "Runbook",
+      "Ops",
+      "MQ",
+      "Kafka"
+    ],
+    "url": "https://teams.microsoft.com/middleware/monitoring-sop",
+    "allowed_roles": [
+      "Middleware L1",
+      "Middleware L2",
+      "Account Admin"
+    ],
+    "content": "Queue depth thresholds; consumer lag; DLQ handling; health probe; circuit trip; PagerDuty escalation; Grafana links."
+  },
+  {
+    "id": "DOC-004",
+    "title": "Analytics Report Automation Playbook",
+    "summary": "Power BI pipeline, dataflows, and incremental refresh setup.",
+    "tower": "Analytics",
+    "track": "BI",
+    "source": "File Share",
+    "tags": [
+      "Power BI",
+      "Pipelines",
+      "Dataflow"
+    ],
+    "url": "\\\\fileshare\\analytics\\pbipipeline.pdf",
+    "allowed_roles": [
+      "BI Analyst",
+      "Analytics Lead",
+      "Account Admin"
+    ],
+    "content": "Gateway configuration; credentials rotation; Power Query performance; incremental refresh; deployment rules."
+  },
+  {
+    "id": "DOC-005",
+    "title": "Hyperion Budget & Planning Setup",
+    "summary": "Cycle setup, metadata loads, and approval workflow steps.",
+    "tower": "Hyperion",
+    "track": "Finance",
+    "source": "SharePoint",
+    "tags": [
+      "Hyperion",
+      "Budgeting",
+      "Planning"
+    ],
+    "url": "https://sharepoint/sites/hyperion/budget-setup",
+    "allowed_roles": [
+      "Hyperion Admin",
+      "Finance Lead",
+      "Account Admin"
+    ],
+    "content": "Entity structure; versioning; driver-based planning; metadata import; security provisioning; Smart View tips."
+  },
+  {
+    "id": "DOC-006",
+    "title": "EBS Patch Calendar & Backout Plan",
+    "summary": "Monthly cadence for patching with pre/post checks and backout steps.",
+    "tower": "EBS",
+    "track": "Release",
+    "source": "Azure DevOps Wiki",
+    "tags": [
+      "Patching",
+      "Release",
+      "Change"
+    ],
+    "url": "https://dev.azure.com/ebs/wiki/patch-calendar",
+    "allowed_roles": [
+      "EBS Engineer",
+      "Release Manager",
+      "Account Admin"
+    ],
+    "content": "RFC creation; CAB notes; smoke tests; schema backup; backout script; stakeholder comms templates."
+  },
+  {
+    "id": "DOC-007",
+    "title": "Middleware Zero-Downtime Deployment",
+    "summary": "Blue/green strategy for API gateway and MQ bridges.",
+    "tower": "Middleware",
+    "track": "Release",
+    "source": "Teams",
+    "tags": [
+      "Deployment",
+      "BlueGreen",
+      "API"
+    ],
+    "url": "https://teams.microsoft.com/mw/release/bluegreen",
+    "allowed_roles": [
+      "Middleware L2",
+      "Release Manager",
+      "Account Admin"
+    ],
+    "content": "Weighted routing; shadow traffic; rollback guard; synthetic checks; MQ bridge cutover; error budgets."
+  }
+]
