@@ -2,11 +2,12 @@ import asyncio
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from agent import WorkflowAgent
+from contextlib import asynccontextmanager
+from agent import WorkflowAgent, ChatMessage, ChatResponse
 from health_check import health_router, HealthChecker
 from approval_workflow import approval_router
 from config.settings import DatabaseConfig
-from models.data_models import WorkflowRequest, WorkflowResponse, ChatMessage, ChatResponse
+from models.data_models import WorkflowRequest, WorkflowResponse
 import os
 import logging
 
@@ -14,10 +15,28 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Lifespan event handler (replaces @app.on_event)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    logger.info("Starting MCP Workflow System...")
+    logger.info("Health check endpoints available at /api/health")
+    logger.info("Main workflow endpoint available at /api/workflow/maintenance")
+    
+    # Initialize the agent
+    global agent
+    agent = WorkflowAgent(openai_api_key=DatabaseConfig.OPENAI_API_KEY)
+    
+    yield  # App runs here
+    
+    # Shutdown code (optional)
+    logger.info("Shutting down MCP Workflow System...")
+
 app = FastAPI(
     title="MCP Workflow System",
     description="Integrated maintenance workflow system with SQL Server, Oracle, .NET API, and HR data",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan  # Add lifespan handler
 )
 
 # CORS middleware
@@ -33,15 +52,8 @@ app.add_middleware(
 app.include_router(health_router, prefix="/api")
 app.include_router(approval_router, prefix="/api")
 
-# Initialize the agent
-agent = WorkflowAgent(openai_api_key=DatabaseConfig.OPENAI_API_KEY)
-
-@app.on_event("startup")
-async def startup_event():
-    """Initialize the system on startup"""
-    logger.info("Starting MCP Workflow System...")
-    logger.info("Health check endpoints available at /api/health")
-    logger.info("Main workflow endpoint available at /api/workflow/maintenance")
+# Global agent instance (initialized in lifespan)
+agent = None
 
 @app.get("/")
 async def root():
@@ -129,11 +141,11 @@ async def list_systems():
     }
 
 if __name__ == "__main__":
-    # Run the application
+    # Run the application - use import string for reload
     uvicorn.run(
-        app,
+        "main:app",  # Use import string instead of app object
         host="0.0.0.0",
         port=8000,
         log_level="info",
-        reload=True  # Enable auto-reload for development
+        reload=True  # This will work now with import string
     )
