@@ -1,3 +1,14 @@
+#import pyodbc
+#from config.settings import DatabaseConfig, SQL_SERVER_CONNECTION_STRING
+#import logging
+
+#logger = logging.getLogger(__name__)
+
+import sys
+import os
+# Add the parent directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import pyodbc
 from config.settings import DatabaseConfig, SQL_SERVER_CONNECTION_STRING
 import logging
