@@ -1,127 +1,98 @@
-import pandas as pd
-from database.sql_server_setup import SQLServerSetup
-from database.oracle_setup import OracleSetup
+import sys
 import os
 import logging
 
+# Add the parent directory to Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from config.settings import DatabaseConfig
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class DatabaseInitializer:
-    def __init__(self):
-        self.sql_setup = SQLServerSetup()
-        self.oracle_setup = OracleSetup()
+def initialize_databases():
+    """Initialize all database systems"""
+    results = {}
     
-    def init_sql_server(self):
-        """Initialize SQL Server database"""
-        logger.info("Initializing SQL Server database...")
-        success, message = self.sql_setup.test_connection()
+    # 1. Initialize SQL Server (Inventory)
+    try:
+        from database.sql_server_setup import SQLServerSetup
+        sql_setup = SQLServerSetup()
+        sql_success, sql_message = sql_setup.test_connection()
         
-        if success:
-            schema_created = self.sql_setup.create_inventory_schema()
-            if schema_created:
-                logger.info("SQL Server initialization completed successfully")
-            else:
-                logger.error("SQL Server schema creation failed")
+        if sql_success:
+            schema_created = sql_setup.create_inventory_schema()
+            results['sql_server'] = {
+                'status': 'success' if schema_created else 'schema_failed',
+                'message': sql_message
+            }
+            logger.info("SQL Server initialized successfully")
         else:
-            logger.error(f"SQL Server connection failed: {message}")
-        
-        return success
+            results['sql_server'] = {'status': 'failed', 'message': sql_message}
+            logger.error(f"SQL Server initialization failed: {sql_message}")
+            
+    except Exception as e:
+        results['sql_server'] = {'status': 'error', 'message': str(e)}
+        logger.error(f"SQL Server error: {e}")
     
-    def init_oracle(self):
-        """Initialize Oracle database"""
-        logger.info("Initializing Oracle database...")
-        success, message = self.oracle_setup.test_connection()
+    # 2. Initialize PostgreSQL (WorkOrders)
+    try:
+        from database.postgresql_setup import PostgreSQLSetup
+        postgres_setup = PostgreSQLSetup()
+        postgres_success, postgres_message = postgres_setup.test_connection()
         
-        if success:
-            schema_created = self.oracle_setup.create_workorders_schema()
-            if schema_created:
-                logger.info("Oracle initialization completed successfully")
+        if postgres_success:
+            db_created = postgres_setup.create_database()
+            if db_created:
+                schema_created = postgres_setup.create_workorders_schema()
+                results['postgresql'] = {
+                    'status': 'success' if schema_created else 'schema_failed', 
+                    'message': postgres_message
+                }
+                logger.info("PostgreSQL initialized successfully")
             else:
-                logger.error("Oracle schema creation failed")
+                results['postgresql'] = {'status': 'db_creation_failed', 'message': postgres_message}
+                logger.warning(f"PostgreSQL database creation failed: {postgres_message}")
         else:
-            logger.error(f"Oracle connection failed: {message}")
-        
-        return success
+            results['postgresql'] = {'status': 'failed', 'message': postgres_message}
+            logger.warning(f"PostgreSQL initialization failed: {postgres_message}")
+            
+    except Exception as e:
+        results['postgresql'] = {'status': 'error', 'message': str(e)}
+        logger.warning(f"PostgreSQL error: {e}")
     
-    def create_hr_excel(self):
-        """Create HR data Excel file"""
-        hr_data = {
-            'employee_id': ['EMP001', 'EMP002', 'EMP003', 'EMP004', 'EMP005', 'EMP006', 'EMP007'],
-            'name': ['John Smith', 'Maria Garcia', 'David Lee', 'Sarah Chen', 'Robert Brown', 'Lisa Wilson', 'Michael Johnson'],
-            'department': ['Maintenance', 'Maintenance', 'Electrical', 'Mechanical', 'Maintenance', 'Electrical', 'Safety'],
-            'position': ['Technician', 'Senior Technician', 'Electrician', 'Mechanic', 'Supervisor', 'Senior Electrician', 'Safety Officer'],
-            'skills': [
-                'pump repair,mechanical,hydraulics',
-                'electrical,welding,control systems', 
-                'electrical,control systems,instrumentation',
-                'mechanical,hydraulics,pneumatics',
-                'supervision,planning,safety',
-                'electrical,high voltage,transformers',
-                'safety,compliance,training'
-            ],
-            'certifications': [
-                'Mechanical Technician, Safety Level 1',
-                'Electrical License, Welding Certified',
-                'Electrical Engineer, Instrumentation',
-                'Mechanical Engineer, Hydraulics',
-                'Supervisor Certified, Safety Level 3',
-                'High Voltage Certified, Electrical Master',
-                'Safety Officer, First Aid, CPR'
-            ],
-            'current_workload': [2, 1, 0, 3, 1, 2, 0],
-            'max_workload': [5, 5, 5, 5, 5, 5, 5],
-            'available': [True, True, True, False, True, True, True],
-            'email': [
-                'john.smith@company.com',
-                'maria.garcia@company.com', 
-                'david.lee@company.com',
-                'sarah.chen@company.com',
-                'robert.brown@company.com',
-                'lisa.wilson@company.com',
-                'michael.johnson@company.com'
-            ],
-            'phone': ['555-0101', '555-0102', '555-0103', '555-0104', '555-0105', '555-0106', '555-0107'],
-            'hire_date': [
-                '2020-03-15', '2019-07-22', '2021-01-10', '2018-11-05', '2017-05-30', '2019-09-12', '2022-02-28'
-            ],
-            'shift': ['Day', 'Night', 'Day', 'Day', 'Day', 'Night', 'Day']
+    # 3. Create HR Excel data
+    try:
+        from data.create_hr_data import create_sample_hr_data
+        excel_created = create_sample_hr_data()
+        results['hr_excel'] = {
+            'status': 'success' if excel_created else 'failed',
+            'message': 'HR Excel data created'
         }
-        
-        df = pd.DataFrame(hr_data)
-        os.makedirs('data', exist_ok=True)
-        df.to_excel('data/hr_data.xlsx', index=False)
-        logger.info("HR Excel file created successfully")
-        return True
-
-def initialize_all_databases():
-    """Initialize all databases and data files"""
-    logger.info("Starting database initialization...")
+        logger.info("HR Excel data created successfully")
+    except Exception as e:
+        results['hr_excel'] = {'status': 'error', 'message': str(e)}
+        logger.error(f"HR Excel creation failed: {e}")
     
-    initializer = DatabaseInitializer()
-    
-    # Initialize SQL Server
-    sql_success = initializer.init_sql_server()
-    
-    # Initialize Oracle
-    oracle_success = initializer.init_oracle()
-    
-    # Create HR Excel file
-    hr_success = initializer.create_hr_excel()
-    
-    # Summary
-    logger.info("Database initialization summary:")
-    logger.info(f"SQL Server: {'SUCCESS' if sql_success else 'FAILED'}")
-    logger.info(f"Oracle: {'SUCCESS' if oracle_success else 'FAILED'}")
-    logger.info(f"HR Data: {'SUCCESS' if hr_success else 'FAILED'}")
-    
-    overall_success = sql_success and oracle_success and hr_success
-    logger.info(f"Overall: {'SUCCESS' if overall_success else 'FAILED'}")
-    
-    return overall_success
+    return results
 
 if __name__ == "__main__":
-    import sys
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    print("Initializing MCP Workflow System Databases...")
+    print("=" * 50)
     
-    success = initialize_all_databases()
-    sys.exit(0 if success else 1)
+    results = initialize_databases()
+    
+    print("\nInitialization Results:")
+    print("=" * 50)
+    for db, result in results.items():
+        status_icon = "✅" if result['status'] == 'success' else "⚠️" if result['status'] in ['skipped', 'db_creation_failed', 'schema_failed'] else "❌"
+        print(f"{status_icon} {db.upper():<12} {result['status']:<15} {result['message']}")
+    
+    # Check if system is operational
+    sql_ok = results.get('sql_server', {}).get('status') == 'success'
+    postgres_ok = results.get('postgresql', {}).get('status') == 'success'
+    
+    if sql_ok and postgres_ok:
+        print("\n🎉 System is ready! You can start the services.")
+    else:
+        print("\n⚠️  System has some issues but may still be operational.")
