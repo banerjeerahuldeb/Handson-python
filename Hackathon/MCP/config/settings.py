@@ -5,15 +5,16 @@ from typing import Optional
 @dataclass
 class DatabaseConfig:
     # SQL Server Configuration (Windows Authentication)
-    SQL_SERVER_HOST: str = os.getenv("SQL_SERVER_HOST", "AVD116\\SQLEXPRESS")
+    SQL_SERVER_HOST: str = os.getenv("SQL_SERVER_HOST", "AVDAILAB-16\\SQLEXPRESS")
     SQL_SERVER_DB: str = os.getenv("SQL_SERVER_DB", "InventoryDB")
     SQL_SERVER_TRUSTED_CONNECTION: str = os.getenv("SQL_SERVER_TRUSTED_CONNECTION", "yes")
     
-    # Oracle Cloud Configuration
-    ORACLE_DSN: str = os.getenv("ORACLE_DSN", 
-        "(description= (retry_count=20)(retry_delay=3)(address=(protocol=tcps)(port=1522)(host=adb.ap-mumbai-1.oraclecloud.com))(connect_data=(service_name=g47e7c82019d9f8_kg94u2w2g92iyiti_high.adb.oraclecloud.com))(security=(ssl_server_dn_match=yes))")
-    ORACLE_USER: str = os.getenv("ORACLE_USER", "your_oracle_username")
-    ORACLE_PASSWORD: str = os.getenv("ORACLE_PASSWORD", "your_oracle_password")
+    # PostgreSQL Configuration
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "workorders_db")
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "")
     
     # API Configuration
     API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8001")
@@ -24,19 +25,18 @@ class DatabaseConfig:
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
 
 # Connection strings
-# SQL Server with Windows Authentication
 SQL_SERVER_CONNECTION_STRING = (
     f"mssql+pyodbc://{DatabaseConfig.SQL_SERVER_HOST}/{DatabaseConfig.SQL_SERVER_DB}"
     f"?trusted_connection={DatabaseConfig.SQL_SERVER_TRUSTED_CONNECTION}"
+    f"&TrustServerCertificate=yes"
     f"&driver=ODBC+Driver+17+for+SQL+Server"
 )
 
-# Oracle with custom DSN
-ORACLE_CONNECTION_STRING = f"oracle://{DatabaseConfig.ORACLE_USER}:{DatabaseConfig.ORACLE_PASSWORD}@?dsn={DatabaseConfig.ORACLE_DSN}"
+# PostgreSQL connection string
+POSTGRES_CONNECTION_STRING = (
+    f"postgresql://{DatabaseConfig.POSTGRES_USER}:{DatabaseConfig.POSTGRES_PASSWORD}"
+    f"@{DatabaseConfig.POSTGRES_HOST}:{DatabaseConfig.POSTGRES_PORT}/{DatabaseConfig.POSTGRES_DB}"
+)
 
-# Alternative Oracle connection string for oracledb driver
-ORACLE_CONNECTION_STRING_ORACLEDB = {
-    "user": DatabaseConfig.ORACLE_USER,
-    "password": DatabaseConfig.ORACLE_PASSWORD,
-    "dsn": DatabaseConfig.ORACLE_DSN
-}
+# For SQLAlchemy (if used)
+POSTGRES_SQLALCHEMY_URI = POSTGRES_CONNECTION_STRING
