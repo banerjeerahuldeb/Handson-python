@@ -1,164 +1,148 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-from sqlalchemy import create_engine, text
-from config.settings import ORACLE_CONNECTION_STRING
-from models.data_models import WorkOrder, WorkOrderStatus, SystemHealthStatus, SystemHealth
-from datetime import datetime
-import time
-import json
+import os
+import sys
+import logging
+from typing import List, Dict, Any
+import psycopg2
+from mcp.server.fastmcp import FastMCP
 
-app = FastAPI(title="WorkOrders MCP Server")
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-class MCPRequest(BaseModel):
-    method: str
-    params: Dict[str, Any] = {}
+from config.settings import DatabaseConfig
 
-engine = create_engine(ORACLE_CONNECTION_STRING)
+# Initialize FastMCP server
+mcp = FastMCP("WorkOrders")
 
-@app.get("/health")
-async def health_check():
-    start_time = time.time()
+logger = logging.getLogger(__name__)
+
+def get_postgres_connection():
+    """Get a connection to PostgreSQL database"""
+    return psycopg2.connect(
+        host=DatabaseConfig.POSTGRES_HOST,
+        port=DatabaseConfig.POSTGRES_PORT,
+        database=DatabaseConfig.POSTGRES_DB,
+        user=DatabaseConfig.POSTGRES_USER,
+        password=DatabaseConfig.POSTGRES_PASSWORD
+    )
+
+@mcp.tool()
+def get_workorders(status: str = None) -> List[Dict[str, Any]]:
+    """Get workorders from PostgreSQL database, optionally filtered by status"""
     try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1 FROM DUAL"))
-        response_time = (time.time() - start_time) * 1000
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
         
-        return SystemHealthStatus(
-            system_name="workorders-mcp-server",
-            status=SystemHealth.HEALTHY,
-            response_time=response_time,
-            details={"database": "connected", "tables": ["workorders"]}
-        )
-    except Exception as e:
-        return SystemHealthStatus(
-            system_name="workorders-mcp-server",
-            status=SystemHealth.DOWN,
-            response_time=0,
-            details={"error": str(e)}
-        )
-
-@app.post("/mcp/workorders/check")
-async def check_workorders(request: MCPRequest):
-    """Check existing work orders for equipment"""
-    try:
-        equipment_id = request.params.get("equipment_id")
-        status_filter = request.params.get("status_filter", [])
-        
-        if not equipment_id:
-            raise HTTPException(status_code=400, detail="Equipment ID required")
-        
-        with engine.connect() as conn:
-            query = text("""
-                SELECT workorder_id, equipment_id, title, description, status, priority,
-                       created_date, assigned_to, required_parts, permits_required,
-                       estimated_hours, actual_hours
+        if status:
+            cursor.execute("""
+                SELECT workorder_id, equipment_id, description, priority, status, 
+                       assigned_to, created_date, completed_date, estimated_hours, actual_hours
                 FROM workorders 
-                WHERE equipment_id = :equipment_id
+                WHERE status = %s
+                ORDER BY created_date DESC
+            """, (status,))
+        else:
+            cursor.execute("""
+                SELECT workorder_id, equipment_id, description, priority, status, 
+                       assigned_to, created_date, completed_date, estimated_hours, actual_hours
+                FROM workorders 
+                ORDER BY created_date DESC
             """)
-            
-            if status_filter:
-                placeholders = ",".join([f"'{status}'" for status in status_filter])
-                query = text(f"""
-                    SELECT workorder_id, equipment_id, title, description, status, priority,
-                           created_date, assigned_to, required_parts, permits_required,
-                           estimated_hours, actual_hours
-                    FROM workorders 
-                    WHERE equipment_id = :equipment_id AND status IN ({placeholders})
-                """)
-            
-            result = conn.execute(query, {"equipment_id": equipment_id})
-            workorders = result.fetchall()
         
-        workorder_list = []
-        for wo in workorders:
-            workorder_list.append({
-                "workorder_id": wo[0],
-                "equipment_id": wo[1],
-                "title": wo[2],
-                "description": wo[3],
-                "status": wo[4],
-                "priority": wo[5],
-                "created_date": wo[6].isoformat() if wo[6] else None,
-                "assigned_to": wo[7],
-                "required_parts": json.loads(wo[8]) if wo[8] else [],
-                "permits_required": json.loads(wo[9]) if wo[9] else [],
-                "estimated_hours": float(wo[10]) if wo[10] else None,
-                "actual_hours": float(wo[11]) if wo[11] else None
-            })
+        columns = [desc[0] for desc in cursor.description]
+        workorders = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        return {
-            "equipment_id": equipment_id,
-            "existing_workorders": workorder_list,
-            "count": len(workorders),
-            "active_count": len([wo for wo in workorder_list if wo["status"] in ["draft", "pending_approval", "approved", "in_progress"]])
-        }
+        cursor.close()
+        conn.close()
         
+        return workorders
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Error fetching workorders: {str(e)}")
+        return []
 
-@app.post("/mcp/workorders/create")
-async def create_workorder(request: MCPRequest):
-    """Create a new work order"""
+@mcp.tool()
+def create_workorder(equipment_id: str, description: str, priority: str = 'medium', 
+                    assigned_to: str = None, estimated_hours: float = None) -> Dict[str, Any]:
+    """Create a new workorder in PostgreSQL database"""
     try:
-        equipment_id = request.params.get("equipment_id")
-        title = request.params.get("title", "Maintenance Work Order")
-        description = request.params.get("description", "")
-        priority = request.params.get("priority", "medium")
-        required_parts = request.params.get("required_parts", [])
-        assigned_to = request.params.get("assigned_to")
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
         
-        if not equipment_id:
-            raise HTTPException(status_code=400, detail="Equipment ID required")
+        cursor.execute("""
+            INSERT INTO workorders (equipment_id, description, priority, status, assigned_to, estimated_hours)
+            VALUES (%s, %s, %s, 'open', %s, %s)
+            RETURNING workorder_id
+        """, (equipment_id, description, priority, assigned_to, estimated_hours))
         
-        # Generate work order ID
-        workorder_id = f"WO-{datetime.now().strftime('%Y%m%d')}-{int(datetime.now().timestamp() % 10000):04d}"
+        workorder_id = cursor.fetchone()[0]
+        conn.commit()
         
-        with engine.connect() as conn:
-            # Get next sequence value for Oracle
-            result = conn.execute(text("SELECT workorder_seq.NEXTVAL FROM DUAL"))
-            seq_id = result.scalar()
-            
-            workorder_id = f"WO-{datetime.now().strftime('%Y%m%d')}-{seq_id:04d}"
-            
-            conn.execute(text("""
-                INSERT INTO workorders (
-                    workorder_id, equipment_id, title, description, status, priority,
-                    assigned_to, required_parts, permits_required, created_date
-                ) VALUES (
-                    :workorder_id, :equipment_id, :title, :description, :status, :priority,
-                    :assigned_to, :required_parts, :permits_required, :created_date
-                )
-            """), {
-                "workorder_id": workorder_id,
-                "equipment_id": equipment_id,
-                "title": title,
-                "description": description,
-                "status": "draft",
-                "priority": priority,
-                "assigned_to": assigned_to,
-                "required_parts": json.dumps(required_parts),
-                "permits_required": json.dumps([]),
-                "created_date": datetime.now()
-            })
-            
-            conn.commit()
+        cursor.close()
+        conn.close()
         
-        return {
-            "success": True,
-            "workorder_id": workorder_id,
-            "message": "Work order created successfully",
-            "details": {
-                "equipment_id": equipment_id,
-                "title": title,
-                "status": "draft",
-                "created_date": datetime.now().isoformat()
-            }
-        }
-        
+        return {"success": True, "workorder_id": workorder_id, "message": "Workorder created successfully"}
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Error creating workorder: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+@mcp.tool()
+def update_workorder_status(workorder_id: int, status: str, actual_hours: float = None) -> Dict[str, Any]:
+    """Update workorder status and optionally actual hours in PostgreSQL database"""
+    try:
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
+        
+        if actual_hours is not None:
+            cursor.execute("""
+                UPDATE workorders 
+                SET status = %s, actual_hours = %s, completed_date = CASE WHEN %s = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_date END
+                WHERE workorder_id = %s
+            """, (status, actual_hours, status, workorder_id))
+        else:
+            cursor.execute("""
+                UPDATE workorders 
+                SET status = %s, completed_date = CASE WHEN %s = 'completed' THEN CURRENT_TIMESTAMP ELSE completed_date END
+                WHERE workorder_id = %s
+            """, (status, status, workorder_id))
+        
+        conn.commit()
+        affected_rows = cursor.rowcount
+        
+        cursor.close()
+        conn.close()
+        
+        if affected_rows == 0:
+            return {"success": False, "message": f"Workorder with ID {workorder_id} not found"}
+        else:
+            return {"success": True, "message": "Workorder updated successfully"}
+    except Exception as e:
+        logger.error(f"Error updating workorder: {str(e)}")
+        return {"success": False, "message": str(e)}
+
+@mcp.tool()
+def get_workorder_tasks(workorder_id: int) -> List[Dict[str, Any]]:
+    """Get tasks for a specific workorder from PostgreSQL database"""
+    try:
+        conn = get_postgres_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT task_id, task_description, status, sequence
+            FROM workorder_tasks
+            WHERE workorder_id = %s
+            ORDER BY sequence
+        """, (workorder_id,))
+        
+        columns = [desc[0] for desc in cursor.description]
+        tasks = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+        
+        return tasks
+    except Exception as e:
+        logger.error(f"Error fetching workorder tasks: {str(e)}")
+        return []
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    # Start the server
+    mcp.run(transport='stdio')
